@@ -1,0 +1,5 @@
+{
+  "name": "Reel Package Generator-v2",
+  "description": "An AI-powered application to generate complete content packages for social media reels and long-form YouTube videos, including scripts, thumbnails, scene-by-scene visuals, and action prompts.",
+  "requestFramePermissions": []
+}
