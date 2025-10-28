@@ -343,6 +343,10 @@ const App: React.FC = () => {
                             scenesFolder.file(`scene_${scene.sceneNumber}.png`, sceneBlob);
                         }
                     }
+                    if (scene.actionPrompt) {
+                        const promptJson = JSON.stringify(scene.actionPrompt, null, 2);
+                        scenesFolder.file(`scene_${scene.sceneNumber}_prompt.json`, promptJson);
+                    }
                 }
             }
 
