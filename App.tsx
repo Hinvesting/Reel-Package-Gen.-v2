@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import type { ContentFormat, ReelPackage } from './types';
-import { generateScript, generateImage, generateActionPrompt, parseScript } from './services/geminiService';
+import { generateScript, generateImage, generateActionPrompt, parseScript, editImage } from './services/geminiService';
 import SceneCard from './components/SceneCard';
-import { LoaderIcon, SparklesIcon, DownloadIcon, CloseIcon, SettingsIcon, TextIcon, TrashIcon } from './components/IconComponents';
+import CharacterCard from './components/CharacterCard';
+import EditImageModal from './components/EditImageModal';
+import { LoaderIcon, SparklesIcon, DownloadIcon, CloseIcon, SettingsIcon, TextIcon, TrashIcon, RefreshIcon, UserIcon, EditIcon } from './components/IconComponents';
 
 // --- ImageModal Component ---
 interface ImageModalProps {
@@ -80,10 +82,16 @@ interface SettingsModalProps {
   onClose: () => void;
   aspectRatio: string;
   onAspectRatioChange: (ratio: string) => void;
+  sceneCount: number;
+  onSceneCountChange: (count: number) => void;
+  defaultTone: string;
+  onDefaultToneChange: (tone: string) => void;
+  onRestart: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, aspectRatio, onAspectRatioChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, aspectRatio, onAspectRatioChange, sceneCount, onSceneCountChange, defaultTone, onDefaultToneChange, onRestart }) => {
     if (!isOpen) return null;
+    const commonTones = ['Cinematic', 'Humorous', 'Inspirational', 'Educational', 'Dramatic', 'Upbeat'];
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50" onClick={onClose}>
@@ -94,23 +102,69 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, aspectRa
                         <CloseIcon className="w-6 h-6" />
                     </button>
                 </div>
-                <div>
-                    <label htmlFor="aspectRatio" className="block text-sm font-medium text-gray-300 mb-2">Image Aspect Ratio</label>
-                    <select
-                        id="aspectRatio"
-                        value={aspectRatio}
-                        onChange={(e) => onAspectRatioChange(e.target.value)}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                    >
-                        <option value="16:9">16:9 (Landscape)</option>
-                        <option value="9:16">9:16 (Portrait)</option>
-                        <option value="1:1">1:1 (Square)</option>
-                        <option value="4:3">4:3 (Classic)</option>
-                        <option value="3:4">3:4 (Tall)</option>
-                    </select>
-                    <p className="text-xs text-gray-400 mt-2">This will affect all generated images, including the thumbnail and scenes.</p>
+                <div className="space-y-6">
+                    <div>
+                        <label htmlFor="aspectRatio" className="block text-sm font-medium text-gray-300 mb-2">Image Aspect Ratio</label>
+                        <select
+                            id="aspectRatio"
+                            value={aspectRatio}
+                            onChange={(e) => onAspectRatioChange(e.target.value)}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        >
+                            <option value="16:9">16:9 (Landscape)</option>
+                            <option value="9:16">9:16 (Portrait)</option>
+                            <option value="1:1">1:1 (Square)</option>
+                            <option value="4:3">4:3 (Classic)</option>
+                            <option value="3:4">3:4 (Tall)</option>
+                        </select>
+                        <p className="text-xs text-gray-400 mt-2">This will affect all generated images, including the thumbnail and scenes.</p>
+                    </div>
+                     <div>
+                        <label htmlFor="sceneCount" className="block text-sm font-medium text-gray-300 mb-2">Default Scene Count</label>
+                        <input
+                            type="number"
+                            id="sceneCount"
+                            value={sceneCount}
+                            onChange={(e) => onSceneCountChange(parseInt(e.target.value, 10) || 1)}
+                            min="1"
+                            max="30"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                        <p className="text-xs text-gray-400 mt-2">Applies when generating a new script from a topic.</p>
+                    </div>
+                    <div>
+                        <label htmlFor="defaultTone" className="block text-sm font-medium text-gray-300 mb-2">Default Tone</label>
+                        <input
+                            type="text"
+                            id="defaultTone"
+                            value={defaultTone}
+                            onChange={(e) => onDefaultToneChange(e.target.value)}
+                            placeholder="e.g., Dark and Gritty"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                        <p className="text-xs text-gray-400 mt-2">Leave empty to let the AI determine the tone from the topic.</p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                           {commonTones.map(tone => (
+                               <button 
+                                key={tone}
+                                onClick={() => onDefaultToneChange(tone)}
+                                className={`px-3 py-1 text-xs rounded-full transition-colors ${defaultTone === tone ? 'bg-cyan-500 text-white' : 'bg-gray-600 hover:bg-gray-500 text-gray-200'}`}
+                               >
+                                {tone}
+                               </button>
+                           ))}
+                        </div>
+                    </div>
                 </div>
-                <div className="mt-6 text-right">
+                <div className="mt-8 flex justify-between items-center">
+                   <button
+                        onClick={onRestart}
+                        className="flex items-center gap-2 bg-red-800/80 text-red-200 font-bold py-2 px-4 rounded-lg hover:bg-red-700 hover:text-white transition-colors"
+                        title="Clear all content and start over"
+                   >
+                        <TrashIcon className="w-5 h-5" />
+                        <span>Restart & Clear</span>
+                   </button>
                    <button
                       onClick={onClose}
                       className="bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-600 transition-colors"
@@ -123,20 +177,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, aspectRa
     );
 };
 
+interface Character {
+  name: string;
+  imageUrl?: string;
+  isLoading: boolean;
+}
 
 const App: React.FC = () => {
     const [topic, setTopic] = useState<string>('');
     const [format, setFormat] = useState<ContentFormat>('reel');
     const [contentSource, setContentSource] = useState<'topic' | 'script'>('topic');
     const [userScript, setUserScript] = useState<string>('');
+    const [characterDescriptions, setCharacterDescriptions] = useState<string>('');
     const [scriptFormat, setScriptFormat] = useState<'scene-by-scene' | 'youtube-short' | 'user-material'>('scene-by-scene');
     const [reelPackage, setReelPackage] = useState<ReelPackage | null>(null);
+    const [characters, setCharacters] = useState<Character[] | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isThumbnailLoading, setIsThumbnailLoading] = useState<boolean>(false);
     const [isZipping, setIsZipping] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [modalImage, setModalImage] = useState<{url: string, name: string, textOverlay?: string} | null>(null);
     const [aspectRatio, setAspectRatio] = useState<string>('16:9');
+    const [sceneCount, setSceneCount] = useState<number>(7);
+    const [defaultTone, setDefaultTone] = useState<string>('');
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+    const [isEditing, setIsEditing] = useState<boolean>(false);
+    const [editError, setEditError] = useState<string | null>(null);
+    const [editingImageInfo, setEditingImageInfo] = useState<{
+        type: 'thumbnail' | 'scene' | 'character';
+        index: number; // Use -1 for thumbnail
+        imageUrl: string;
+    } | null>(null);
+
 
     const openModal = (url: string, name: string, textOverlay?: string) => {
         setModalImage({ url, name, textOverlay });
@@ -150,6 +222,7 @@ const App: React.FC = () => {
         setIsLoading(true);
         setError(null);
         setReelPackage(null);
+        setCharacters(null);
 
         try {
             let scriptData;
@@ -162,18 +235,27 @@ const App: React.FC = () => {
                     return;
                 }
                 videoTopic = topic;
-                scriptData = await generateScript(topic, format);
+                scriptData = await generateScript(topic, format, sceneCount, defaultTone);
             } else { // contentSource === 'script'
                 if (!userScript.trim()) {
                     setError('Please paste your script.');
                     setIsLoading(false);
                     return;
                 }
-                scriptData = await parseScript(userScript, scriptFormat, format);
+                scriptData = await parseScript(userScript, scriptFormat, format, characterDescriptions);
                 videoTopic = scriptData.title;
+                if (scriptData.characters && scriptData.characters.length > 0) {
+                    setCharacters(scriptData.characters.map(name => ({ name, isLoading: false })));
+                }
             }
             
-            const thumbnailPrompt = `A visually stunning and click-worthy thumbnail for a video titled "${scriptData.title}" on the topic of "${videoTopic}". High resolution, cinematic quality.`;
+            let thumbnailPrompt = `A visually stunning and click-worthy thumbnail for a video titled "${scriptData.title}" on the topic of "${videoTopic}". High resolution, cinematic quality.`;
+
+            if (scriptData.scenes && scriptData.scenes.length > 0) {
+                const firstSceneDescription = scriptData.scenes[0].description;
+                thumbnailPrompt = `Create a visually stunning, click-worthy YouTube thumbnail for a video titled "${scriptData.title}". The thumbnail must feature the main character and setting from this scene description: "${firstSceneDescription}". It must be high resolution with a cinematic quality. The overall mood should reflect the video's topic: "${videoTopic}".`;
+            }
+
             const imageUrl = await generateImage(thumbnailPrompt, aspectRatio);
 
             const newPackage: ReelPackage = {
@@ -198,6 +280,142 @@ const App: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    const getGenReferenceImages = useCallback((sceneIndex: number): string[] => {
+        const refs: string[] = [];
+        if (characters) {
+            characters.forEach(c => c.imageUrl && refs.push(c.imageUrl));
+        }
+        if (reelPackage) {
+            refs.push(reelPackage.thumbnail.imageUrl);
+            for (let i = 0; i < sceneIndex; i++) {
+                if (reelPackage.scenes[i].imageUrl) {
+                    refs.push(reelPackage.scenes[i].imageUrl!);
+                }
+            }
+        }
+        return [...new Set(refs)];
+    }, [characters, reelPackage]);
+
+    const getRegenReferenceImages = useCallback((sceneIndexToExclude: number): string[] => {
+        const refs: string[] = [];
+        if (characters) {
+            characters.forEach(c => c.imageUrl && refs.push(c.imageUrl));
+        }
+        if (reelPackage) {
+            refs.push(reelPackage.thumbnail.imageUrl);
+            reelPackage.scenes.forEach((scene, i) => {
+                if (i !== sceneIndexToExclude && scene.imageUrl) {
+                    refs.push(scene.imageUrl);
+                }
+            });
+        }
+        return [...new Set(refs)];
+    }, [characters, reelPackage]);
+    
+    const handleRegenerateThumbnail = async () => {
+        if (!reelPackage) return;
+
+        setIsThumbnailLoading(true);
+        setError(null);
+
+        try {
+            const { title } = reelPackage.thumbnail;
+            const { topic, scenes } = reelPackage;
+
+            let thumbnailPrompt = `A visually stunning and click-worthy thumbnail for a video titled "${title}" on the topic of "${topic}". High resolution, cinematic quality.`;
+            if (scenes && scenes.length > 0) {
+                const firstSceneDescription = scenes[0].description;
+                thumbnailPrompt = `Create a visually stunning, click-worthy YouTube thumbnail for a video titled "${title}". The thumbnail must feature the main character and setting from this scene description: "${firstSceneDescription}". It must be high resolution with a cinematic quality. The overall mood should reflect the video's topic: "${topic}".`;
+            }
+
+            const referenceImages = getRegenReferenceImages(-1);
+            const newImageUrl = await generateImage(thumbnailPrompt, aspectRatio, referenceImages);
+
+            setReelPackage(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    thumbnail: {
+                        ...prev.thumbnail,
+                        imageUrl: newImageUrl,
+                    },
+                };
+            });
+        } catch (e) {
+            const err = e as Error;
+            console.error("Error regenerating thumbnail:", err);
+            setError("Failed to regenerate thumbnail. Please try again.");
+        } finally {
+            setIsThumbnailLoading(false);
+        }
+    };
+
+    const extractCharacterDescription = (characterName: string, descriptionsText: string): string | null => {
+        if (!descriptionsText.trim()) {
+            return null;
+        }
+        const characterBlocks = descriptionsText.split(/\n\s*\n/);
+        for (const block of characterBlocks) {
+            const nameMatch = block.match(/^(?:\*\s*)?Name:\s*(.+)$/im);
+            if (nameMatch && nameMatch[1].trim().toLowerCase() === characterName.trim().toLowerCase()) {
+                return block.trim();
+            }
+        }
+        return null;
+    };
+
+    const handleGenerateCharacterImage = useCallback(async (characterIndex: number) => {
+        if (!characters) return;
+        
+        setCharacters(prev => {
+            if (!prev) return null;
+            const newCharacters = [...prev];
+            newCharacters[characterIndex] = { ...newCharacters[characterIndex], isLoading: true };
+            return newCharacters;
+        });
+
+        try {
+            const characterToGenerate = characters[characterIndex];
+            const description = extractCharacterDescription(characterToGenerate.name, characterDescriptions);
+
+            let prompt = `Cinematic portrait of ${characterToGenerate.name}. Consistent character design for a video series.`;
+            if (description) {
+                prompt = `Generate a cinematic portrait of a character based on the following detailed description. Ensure the portrait accurately reflects all the specified physical attributes, style, and mood.
+                
+                Description:
+                ---
+                ${description}
+                ---
+                
+                The final image should be a high-quality, realistic or semi-realistic portrait suitable for a video series, with a 1:1 aspect ratio.`;
+            }
+
+            const charImage = await generateImage(prompt, '1:1');
+
+            setCharacters(prev => {
+                if (!prev) return null;
+                const newCharacters = [...prev];
+                newCharacters[characterIndex] = {
+                    ...newCharacters[characterIndex],
+                    imageUrl: charImage,
+                    isLoading: false
+                };
+                return newCharacters;
+            });
+
+        } catch (e) {
+            const err = e as Error;
+            console.error(err);
+            setError(`Failed to generate image for ${characters[characterIndex].name}. Please try again.`);
+            setCharacters(prev => {
+                if (!prev) return null;
+                const newCharacters = [...prev];
+                newCharacters[characterIndex] = { ...newCharacters[characterIndex], isLoading: false };
+                return newCharacters;
+            });
+        }
+    }, [characters, characterDescriptions]);
     
     const handleGenerateScene = useCallback(async (sceneIndex: number) => {
         if (!reelPackage) return;
@@ -211,12 +429,7 @@ const App: React.FC = () => {
 
         try {
             const sceneToGenerate = reelPackage.scenes[sceneIndex];
-            const referenceImages: string[] = [reelPackage.thumbnail.imageUrl];
-            for (let i = 0; i < sceneIndex; i++) {
-                if (reelPackage.scenes[i].imageUrl) {
-                    referenceImages.push(reelPackage.scenes[i].imageUrl!);
-                }
-            }
+            const referenceImages = getGenReferenceImages(sceneIndex);
             
             const sceneImage = await generateImage(sceneToGenerate.description, aspectRatio, referenceImages);
             const actionPrompt = await generateActionPrompt(
@@ -250,7 +463,7 @@ const App: React.FC = () => {
                 return { ...prev, scenes: newScenes };
             });
         }
-    }, [reelPackage, aspectRatio]);
+    }, [reelPackage, aspectRatio, getGenReferenceImages]);
     
     const handleRegenerateSceneImage = useCallback(async (sceneIndex: number) => {
         if (!reelPackage) return;
@@ -264,14 +477,7 @@ const App: React.FC = () => {
 
         try {
             const sceneToRegenerate = reelPackage.scenes[sceneIndex];
-            
-            const referenceImages: string[] = [reelPackage.thumbnail.imageUrl];
-            reelPackage.scenes.forEach((scene, i) => {
-                if (i !== sceneIndex && scene.imageUrl) {
-                    referenceImages.push(scene.imageUrl);
-                }
-            });
-
+            const referenceImages = getRegenReferenceImages(sceneIndex);
             const sceneImage = await generateImage(sceneToRegenerate.description, aspectRatio, referenceImages);
             const actionPrompt = await generateActionPrompt(
                 reelPackage.topic,
@@ -304,7 +510,65 @@ const App: React.FC = () => {
                 return { ...prev, scenes: newScenes };
             });
         }
-    }, [reelPackage, aspectRatio]);
+    }, [reelPackage, aspectRatio, getRegenReferenceImages]);
+
+    const handleOpenEditModal = (type: 'thumbnail' | 'scene' | 'character', index: number, imageUrl: string) => {
+        setEditingImageInfo({ type, index, imageUrl });
+    };
+
+    const handleCloseEditModal = () => {
+        setEditingImageInfo(null);
+        setIsEditing(false); // Reset loading state
+        setEditError(null); // Reset error state
+    };
+
+    const handleApplyEdit = async (prompt: string) => {
+        if (!editingImageInfo || !prompt.trim()) return;
+
+        setIsEditing(true);
+        setEditError(null);
+
+        try {
+            const newImageUrl = await editImage(editingImageInfo.imageUrl, prompt);
+            const { type, index } = editingImageInfo;
+
+            if (type === 'thumbnail') {
+                setReelPackage(prev => prev ? { ...prev, thumbnail: { ...prev.thumbnail, imageUrl: newImageUrl } } : null);
+            } else if (type === 'character') {
+                setCharacters(prev => {
+                    if (!prev) return null;
+                    const newChars = [...prev];
+                    newChars[index] = { ...newChars[index], imageUrl: newImageUrl };
+                    return newChars;
+                });
+            } else if (type === 'scene' && reelPackage) {
+                const sceneToUpdate = reelPackage.scenes[index];
+                // Regenerate action prompt with the new image
+                const newActionPrompt = await generateActionPrompt(
+                    reelPackage.topic,
+                    reelPackage.format,
+                    sceneToUpdate.description,
+                    sceneToUpdate.dialogue,
+                    newImageUrl
+                );
+                
+                setReelPackage(prev => {
+                    if (!prev) return null;
+                    const newScenes = [...prev.scenes];
+                    newScenes[index] = { ...newScenes[index], imageUrl: newImageUrl, actionPrompt: newActionPrompt };
+                    return { ...prev, scenes: newScenes };
+                });
+            }
+
+            handleCloseEditModal();
+        } catch (e) {
+            const err = e as Error;
+            console.error("Error editing image:", err);
+            setEditError(err.message || "Failed to edit image. Please try again.");
+        } finally {
+            setIsEditing(false);
+        }
+    };
 
     const dataURLtoBlob = (dataurl: string): Blob | null => {
         const arr = dataurl.split(',');
@@ -332,6 +596,21 @@ const App: React.FC = () => {
             const thumbnailBlob = dataURLtoBlob(reelPackage.thumbnail.imageUrl);
             if (thumbnailBlob) {
                 zip.file("thumbnail.png", thumbnailBlob);
+            }
+            
+            if (characters && characters.length > 0) {
+                const charactersFolder = zip.folder("characters");
+                if (charactersFolder) {
+                    for (const char of characters) {
+                        if (char.imageUrl) {
+                            const charBlob = dataURLtoBlob(char.imageUrl);
+                            if (charBlob) {
+                                const safeName = char.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                                charactersFolder.file(`${safeName}.png`, charBlob);
+                            }
+                        }
+                    }
+                }
             }
 
             const scenesFolder = zip.folder("scenes");
@@ -382,10 +661,17 @@ const App: React.FC = () => {
 
     const handleClearContent = () => {
         setReelPackage(null);
+        setCharacters(null);
         setTopic('');
         setUserScript('');
+        setCharacterDescriptions('');
         setError(null);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleRestart = () => {
+        handleClearContent();
+        setIsSettingsOpen(false);
     };
 
     const formatDescription = format === 'reel' 
@@ -481,6 +767,17 @@ const App: React.FC = () => {
                                             className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                                         />
                                     </div>
+                                    <div>
+                                        <label htmlFor="characterDescriptions" className="block text-sm font-medium text-gray-300 mb-1">Character Descriptions (Optional)</label>
+                                        <textarea
+                                            id="characterDescriptions"
+                                            value={characterDescriptions}
+                                            onChange={(e) => setCharacterDescriptions(e.target.value)}
+                                            placeholder="Paste character descriptions here to guide image generation..."
+                                            rows={10}
+                                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -513,14 +810,67 @@ const App: React.FC = () => {
                             </h2>
                              <div 
                                 className="max-w-2xl mx-auto rounded-lg overflow-hidden shadow-lg border border-cyan-500/30 cursor-pointer group relative"
-                                onClick={() => openModal(reelPackage.thumbnail.imageUrl, `${reelPackage.topic}-thumbnail.png`.replace(/\s+/g, '_'))}
+                                onClick={() => !isThumbnailLoading && openModal(reelPackage.thumbnail.imageUrl, `${reelPackage.topic}-thumbnail.png`.replace(/\s+/g, '_'))}
                              >
+                                {isThumbnailLoading && (
+                                     <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-20">
+                                        <LoaderIcon className="w-10 h-10 text-cyan-400" />
+                                        <p className="mt-2 text-gray-200">Regenerating Thumbnail...</p>
+                                    </div>
+                                )}
                                 <img src={reelPackage.thumbnail.imageUrl} alt="Generated Thumbnail" className="w-full transition-transform duration-300 group-hover:scale-105" />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex items-center justify-center">
                                     <p className="text-white text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity">View Image</p>
                                 </div>
+                                {!isThumbnailLoading && (
+                                    <div className="absolute top-2 right-2 flex flex-col gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenEditModal('thumbnail', -1, reelPackage.thumbnail.imageUrl);
+                                            }}
+                                            className="bg-gray-800/60 hover:bg-pink-600 text-white p-2 rounded-full transition-all backdrop-blur-sm"
+                                            title="Edit Image"
+                                        >
+                                            <EditIcon className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRegenerateThumbnail();
+                                            }}
+                                            disabled={isThumbnailLoading}
+                                            className="bg-gray-800/60 hover:bg-cyan-600 text-white p-2 rounded-full transition-all backdrop-blur-sm disabled:opacity-50"
+                                            title="Regenerate Thumbnail"
+                                        >
+                                            <RefreshIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                )}
                              </div>
                         </div>
+
+                        {characters && characters.length > 0 && (
+                            <div className="mt-12">
+                                <h3 className="text-2xl font-bold mb-6 text-center flex items-center justify-center gap-2">
+                                    <UserIcon className="w-7 h-7" />
+                                    Characters
+                                </h3>
+                                <div className="flex flex-wrap justify-center -m-2 max-w-5xl mx-auto">
+                                    {characters.map((character, index) => (
+                                        <div key={index} className="w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/5 p-2">
+                                            <CharacterCard 
+                                                character={character}
+                                                onGenerateImage={() => handleGenerateCharacterImage(index)}
+                                                onRegenerateImage={() => handleGenerateCharacterImage(index)}
+                                                onImageClick={(imageUrl) => openModal(imageUrl, `${character.name}.png`.replace(/\s+/g, '_'))}
+                                                onOpenEditModal={(imageUrl) => handleOpenEditModal('character', index, imageUrl)}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <div>
                             <h3 className="text-2xl font-bold mb-6 text-center">Scenes</h3>
@@ -532,6 +882,7 @@ const App: React.FC = () => {
                                         onGenerateScene={() => handleGenerateScene(index)}
                                         onImageClick={(imageUrl, textOverlay) => openModal(imageUrl, `${reelPackage.topic}-scene-${scene.sceneNumber}.png`.replace(/\s+/g, '_'), textOverlay)}
                                         onRegenerateImage={() => handleRegenerateSceneImage(index)}
+                                        onOpenEditModal={(imageUrl) => handleOpenEditModal('scene', index, imageUrl)}
                                     />
                                 ))}
                             </div>
@@ -577,11 +928,26 @@ const App: React.FC = () => {
                     onClose={closeModal}
                 />
             )}
+            {editingImageInfo && (
+                <EditImageModal
+                    isOpen={!!editingImageInfo}
+                    onClose={handleCloseEditModal}
+                    onSubmit={handleApplyEdit}
+                    currentImageUrl={editingImageInfo.imageUrl}
+                    isLoading={isEditing}
+                    error={editError}
+                />
+            )}
             <SettingsModal
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
                 aspectRatio={aspectRatio}
                 onAspectRatioChange={setAspectRatio}
+                sceneCount={sceneCount}
+                onSceneCountChange={setSceneCount}
+                defaultTone={defaultTone}
+                onDefaultToneChange={setDefaultTone}
+                onRestart={handleRestart}
             />
         </div>
     );

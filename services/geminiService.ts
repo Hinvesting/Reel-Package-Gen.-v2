@@ -3,7 +3,7 @@ import type { ContentFormat } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-interface ScriptResponse {
+export interface ScriptResponse {
     title: string;
     scenes: Array<{
         description: string;
@@ -12,11 +12,18 @@ interface ScriptResponse {
     }>;
 }
 
-export const generateScript = async (topic: string, format: ContentFormat): Promise<ScriptResponse> => {
-    const sceneCount = format === 'reel' ? 'exactly 7 scenes' : '15-20 detailed scenes';
+export interface ParsedScriptResponse extends ScriptResponse {
+    characters?: string[];
+}
+
+export const generateScript = async (topic: string, format: ContentFormat, sceneCountValue: number | string, tone: string): Promise<ScriptResponse> => {
+    const sceneCount = typeof sceneCountValue === 'number' ? `exactly ${sceneCountValue} scenes` : sceneCountValue;
     const videoType = format === 'reel' ? '60-second social media reel' : '5-10 minute YouTube video';
+    const toneInstruction = tone.trim()
+        ? `The script should have a ${tone.trim()} tone.`
+        : 'The script should have a tone that is appropriate for the topic.';
     
-    const prompt = `Generate a script for a ${videoType} on '${topic}'. Create ${sceneCount}. For each scene, provide a visual description and spoken dialogue. When a scene's message can be enhanced by a text overlay, add a 'textOverlay' field with short, impactful text (max 10 words). If no text is needed, omit the 'textOverlay' field. Output MUST be valid JSON: { "title": "Catchy Title", "scenes": [{"description": "Visual description", "dialogue": "Spoken text", "textOverlay": "Optional text overlay"}, ...] }`;
+    const prompt = `Generate a script for a ${videoType} on '${topic}'. Create ${sceneCount}. ${toneInstruction} For each scene, provide a visual description and spoken dialogue. When a scene's message can be enhanced by a text overlay, add a 'textOverlay' field with short, impactful text (max 10 words). If no text is needed, omit the 'textOverlay' field. Output MUST be valid JSON: { "title": "Catchy Title", "scenes": [{"description": "Visual description", "dialogue": "Spoken text", "textOverlay": "Optional text overlay"}, ...] }`;
 
     try {
         const response = await ai.models.generateContent({
@@ -38,8 +45,9 @@ export const generateScript = async (topic: string, format: ContentFormat): Prom
 export const parseScript = async (
     userScript: string,
     scriptFormat: 'scene-by-scene' | 'youtube-short' | 'user-material',
-    contentFormat: ContentFormat
-): Promise<ScriptResponse> => {
+    contentFormat: ContentFormat,
+    characterDescriptions?: string
+): Promise<ParsedScriptResponse> => {
     const videoType = contentFormat === 'reel' ? '60-second social media reel' : '5-10 minute YouTube video';
 
     let formatInstructions = '';
@@ -55,10 +63,23 @@ export const parseScript = async (
             break;
     }
 
+    const characterDescriptionInstructions = characterDescriptions?.trim()
+    ? `
+    The user has provided detailed character descriptions below. Use these descriptions to create rich and consistent visual descriptions for each scene. Ensure the appearance, attire, and mannerisms of the characters in the scenes align perfectly with their provided descriptions.
+
+    CHARACTER DESCRIPTIONS:
+    ---
+    ${characterDescriptions}
+    ---
+    `
+    : '';
+
     const prompt = `Analyze the following script and convert it into a structured JSON format for a ${videoType}.
 ${formatInstructions}
+${characterDescriptionInstructions}
+Also, scan the script for character declarations in the format 'Character: [Full Name]'. If found, extract the names and return them in a 'characters' array in the root of the JSON object. If no characters are declared this way, omit the 'characters' field.
 For each scene you create, also consider if a text overlay would enhance the message. If so, add a 'textOverlay' field with short, impactful text (max 10 words). If no text is needed, omit this field.
-The final output MUST be valid JSON with this exact structure: { "title": "Catchy Title", "scenes": [{"description": "Visual description", "dialogue": "Spoken text or voice-over", "textOverlay": "Optional text overlay"}, ...] }.
+The final output MUST be valid JSON with this exact structure: { "title": "Catchy Title", "scenes": [{"description": "Visual description", "dialogue": "Spoken text or voice-over", "textOverlay": "Optional text overlay"}, ...], "characters": ["Character Name 1", "Character Name 2"] }.
 
 Here is the script:
 ---
@@ -76,7 +97,7 @@ ${userScript}
         });
         
         const jsonString = response.text.trim();
-        return JSON.parse(jsonString) as ScriptResponse;
+        return JSON.parse(jsonString) as ParsedScriptResponse;
     } catch (error) {
         console.error("Error parsing script:", error);
         throw new Error("Failed to parse script. The model might have returned an invalid JSON.");
@@ -124,6 +145,44 @@ export const generateImage = async (prompt: string, aspectRatio: string, referen
     } catch (error) {
         console.error("Error generating image:", error);
         throw new Error("Failed to generate image.");
+    }
+};
+
+export const editImage = async (base64ImageData: string, prompt: string): Promise<string> => {
+    try {
+        const mimeType = base64ImageData.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
+        const data = base64ImageData.split(',')[1];
+        
+        const imagePart = {
+            inlineData: {
+                mimeType,
+                data,
+            },
+        };
+
+        const textPart = {
+            text: `Edit the provided image based on the following instruction: "${prompt}". Maintain the original style and composition as much as possible, only applying the requested change.`
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts: [imagePart, textPart] },
+            config: {
+                responseModalities: [Modality.IMAGE],
+            },
+        });
+
+        for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                return `data:image/png;base64,${base64ImageBytes}`;
+            }
+        }
+        throw new Error("No edited image was generated by the model.");
+
+    } catch (error) {
+        console.error("Error editing image:", error);
+        throw new Error("Failed to edit image.");
     }
 };
 

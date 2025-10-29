@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { ReelPackage } from '../types';
-import { CopyIcon, CheckIcon, LoaderIcon, RefreshIcon, TextIcon } from './IconComponents';
+import { CopyIcon, CheckIcon, LoaderIcon, RefreshIcon, TextIcon, EditIcon } from './IconComponents';
 
 type Scene = ReelPackage['scenes'][0];
 
@@ -9,9 +9,10 @@ interface SceneCardProps {
     onGenerateScene: () => Promise<void>;
     onImageClick: (imageUrl: string, textOverlay?: string) => void;
     onRegenerateImage: () => Promise<void>;
+    onOpenEditModal: (imageUrl: string) => void;
 }
 
-const SceneCard: React.FC<SceneCardProps> = ({ scene, onGenerateScene, onImageClick, onRegenerateImage }) => {
+const SceneCard: React.FC<SceneCardProps> = ({ scene, onGenerateScene, onImageClick, onRegenerateImage, onOpenEditModal }) => {
     const [copied, setCopied] = useState(false);
     const [showOverlay, setShowOverlay] = useState(true);
 
@@ -57,6 +58,16 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene, onGenerateScene, onImageCl
                         </div>
                         {!scene.isLoading && (
                             <div className="absolute top-2 right-2 flex flex-col gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenEditModal(scene.imageUrl!);
+                                    }}
+                                    className="bg-gray-800/60 hover:bg-pink-600 text-white p-2 rounded-full transition-all backdrop-blur-sm"
+                                    title="Edit Image"
+                                >
+                                    <EditIcon className="w-5 h-5" />
+                                </button>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
