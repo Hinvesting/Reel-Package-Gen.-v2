@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Modality } from "@google/genai";
 import type { ContentFormat } from '../types';
 
@@ -25,7 +23,7 @@ export const generateScript = async (topic: string, format: ContentFormat, scene
         ? `The script should have a ${tone.trim()} tone.`
         : 'The script should have a tone that is appropriate for the topic.';
     
-    const prompt = `Generate a script for a ${videoType} on '${topic}'. Create ${sceneCount}. ${toneInstruction} For each scene, provide a visual description and spoken dialogue. When a scene's message can be enhanced by a text overlay, add a 'textOverlay' field with short, impactful text (max 10 words). If no text is needed, omit the 'textOverlay' field. Output MUST be valid JSON: { "title": "Catchy Title", "scenes": [{"description": "Visual description", "dialogue": "Spoken text", "textOverlay": "Optional text overlay"}, ...] }`;
+    const prompt = `Generate a script for a ${videoType} on '${topic}'. Create ${sceneCount}. ${toneInstruction} For each scene, provide a detailed visual description that includes a specific camera angle (e.g., low-angle, high-angle, point-of-view) and shot type (e.g., close-up, medium shot, wide shot). This detail is crucial for visual storytelling. Also provide spoken dialogue for the scene. When a scene's message can be enhanced by a text overlay, add a 'textOverlay' field with short, impactful text (max 10 words). If no text is needed, omit the 'textOverlay' field. Output MUST be valid JSON: { "title": "Catchy Title", "scenes": [{"description": "Detailed visual description including camera angle and shot type.", "dialogue": "Spoken text", "textOverlay": "Optional text overlay"}, ...] }`;
 
     try {
         const response = await ai.models.generateContent({
@@ -79,9 +77,12 @@ export const parseScript = async (
     const prompt = `Analyze the following script and convert it into a structured JSON format for a ${videoType}.
 ${formatInstructions}
 ${characterDescriptionInstructions}
+
+IMPORTANT: For each scene you create, the 'description' field MUST be a detailed visual description. If the original script specifies camera directions, use them. If not, you must creatively add a specific camera angle (e.g., low-angle, high-angle, point-of-view) and a shot type (e.g., close-up, medium shot, wide shot) to enhance the visual storytelling.
+
 Also, scan the script for character declarations in the format 'Character: [Full Name]'. If found, extract the names and return them in a 'characters' array in the root of the JSON object. If no characters are declared this way, omit the 'characters' field.
 For each scene you create, also consider if a text overlay would enhance the message. If so, add a 'textOverlay' field with short, impactful text (max 10 words). If no text is needed, omit this field.
-The final output MUST be valid JSON with this exact structure: { "title": "Catchy Title", "scenes": [{"description": "Visual description", "dialogue": "Spoken text or voice-over", "textOverlay": "Optional text overlay"}, ...], "characters": ["Character Name 1", "Character Name 2"] }.
+The final output MUST be valid JSON with this exact structure: { "title": "Catchy Title", "scenes": [{"description": "Visual description with camera angle and shot type.", "dialogue": "Spoken text or voice-over", "textOverlay": "Optional text overlay"}, ...], "characters": ["Character Name 1", "Character Name 2"] }.
 
 Here is the script:
 ---
