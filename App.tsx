@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import type { ContentFormat, ReelPackage } from './types';
 import { generateScript, generateImage, generateActionPrompt, parseScript, editImage } from './services/geminiService';
@@ -91,7 +92,7 @@ interface SettingsModalProps {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, aspectRatio, onAspectRatioChange, sceneCount, onSceneCountChange, defaultTone, onDefaultToneChange, onRestart }) => {
     if (!isOpen) return null;
-    const commonTones = ['Cinematic', 'Humorous', 'Inspirational', 'Educational', 'Dramatic', 'Upbeat'];
+    const commonTones = ['Cinematic', 'Humorous', 'Inspirational', 'Educational', 'Dramatic', 'Upbeat', 'Realistic'];
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50" onClick={onClose}>
@@ -249,14 +250,10 @@ const App: React.FC = () => {
                 }
             }
             
-            let thumbnailPrompt = `A visually stunning and click-worthy thumbnail for a video titled "${scriptData.title}" on the topic of "${videoTopic}". High resolution, cinematic quality.`;
+            const overallDescription = scriptData.scenes.map(s => s.description).join(' ');
+            const thumbnailPrompt = `Create a visually stunning, click-worthy YouTube thumbnail for a video titled "${scriptData.title}". The video is about "${videoTopic}". The overall story involves: "${overallDescription}". The thumbnail should capture the main theme and most exciting elements of the video. It must be high resolution with a cinematic quality.`;
 
-            if (scriptData.scenes && scriptData.scenes.length > 0) {
-                const firstSceneDescription = scriptData.scenes[0].description;
-                thumbnailPrompt = `Create a visually stunning, click-worthy YouTube thumbnail for a video titled "${scriptData.title}". The thumbnail must feature the main character and setting from this scene description: "${firstSceneDescription}". It must be high resolution with a cinematic quality. The overall mood should reflect the video's topic: "${videoTopic}".`;
-            }
-
-            const imageUrl = await generateImage(thumbnailPrompt, aspectRatio);
+            const imageUrl = await generateImage(thumbnailPrompt, aspectRatio, defaultTone);
 
             const newPackage: ReelPackage = {
                 topic: videoTopic,
@@ -323,14 +320,11 @@ const App: React.FC = () => {
             const { title } = reelPackage.thumbnail;
             const { topic, scenes } = reelPackage;
 
-            let thumbnailPrompt = `A visually stunning and click-worthy thumbnail for a video titled "${title}" on the topic of "${topic}". High resolution, cinematic quality.`;
-            if (scenes && scenes.length > 0) {
-                const firstSceneDescription = scenes[0].description;
-                thumbnailPrompt = `Create a visually stunning, click-worthy YouTube thumbnail for a video titled "${title}". The thumbnail must feature the main character and setting from this scene description: "${firstSceneDescription}". It must be high resolution with a cinematic quality. The overall mood should reflect the video's topic: "${topic}".`;
-            }
+            const overallDescription = scenes.map(s => s.description).join(' ');
+            const thumbnailPrompt = `Create a visually stunning, click-worthy YouTube thumbnail for a video titled "${title}". The video is about "${topic}". The overall story involves: "${overallDescription}". The thumbnail should capture the main theme and most exciting elements of the video. It must be high resolution with a cinematic quality.`;
 
             const referenceImages = getRegenReferenceImages(-1);
-            const newImageUrl = await generateImage(thumbnailPrompt, aspectRatio, referenceImages);
+            const newImageUrl = await generateImage(thumbnailPrompt, aspectRatio, defaultTone, referenceImages);
 
             setReelPackage(prev => {
                 if (!prev) return null;
@@ -391,7 +385,7 @@ const App: React.FC = () => {
                 The final image should be a high-quality, realistic or semi-realistic portrait suitable for a video series, with a 1:1 aspect ratio.`;
             }
 
-            const charImage = await generateImage(prompt, '1:1');
+            const charImage = await generateImage(prompt, '1:1', defaultTone);
 
             setCharacters(prev => {
                 if (!prev) return null;
@@ -415,7 +409,7 @@ const App: React.FC = () => {
                 return newCharacters;
             });
         }
-    }, [characters, characterDescriptions]);
+    }, [characters, characterDescriptions, defaultTone]);
     
     const handleGenerateScene = useCallback(async (sceneIndex: number) => {
         if (!reelPackage) return;
@@ -431,7 +425,7 @@ const App: React.FC = () => {
             const sceneToGenerate = reelPackage.scenes[sceneIndex];
             const referenceImages = getGenReferenceImages(sceneIndex);
             
-            const sceneImage = await generateImage(sceneToGenerate.description, aspectRatio, referenceImages);
+            const sceneImage = await generateImage(sceneToGenerate.description, aspectRatio, defaultTone, referenceImages);
             const actionPrompt = await generateActionPrompt(
                 reelPackage.topic,
                 reelPackage.format,
@@ -463,7 +457,7 @@ const App: React.FC = () => {
                 return { ...prev, scenes: newScenes };
             });
         }
-    }, [reelPackage, aspectRatio, getGenReferenceImages]);
+    }, [reelPackage, aspectRatio, defaultTone, getGenReferenceImages]);
     
     const handleRegenerateSceneImage = useCallback(async (sceneIndex: number) => {
         if (!reelPackage) return;
@@ -478,7 +472,7 @@ const App: React.FC = () => {
         try {
             const sceneToRegenerate = reelPackage.scenes[sceneIndex];
             const referenceImages = getRegenReferenceImages(sceneIndex);
-            const sceneImage = await generateImage(sceneToRegenerate.description, aspectRatio, referenceImages);
+            const sceneImage = await generateImage(sceneToRegenerate.description, aspectRatio, defaultTone, referenceImages);
             const actionPrompt = await generateActionPrompt(
                 reelPackage.topic,
                 reelPackage.format,
@@ -510,7 +504,7 @@ const App: React.FC = () => {
                 return { ...prev, scenes: newScenes };
             });
         }
-    }, [reelPackage, aspectRatio, getRegenReferenceImages]);
+    }, [reelPackage, aspectRatio, defaultTone, getRegenReferenceImages]);
 
     const handleOpenEditModal = (type: 'thumbnail' | 'scene' | 'character', index: number, imageUrl: string) => {
         setEditingImageInfo({ type, index, imageUrl });
@@ -821,6 +815,7 @@ const App: React.FC = () => {
                                 <img src={reelPackage.thumbnail.imageUrl} alt="Generated Thumbnail" className="w-full transition-transform duration-300 group-hover:scale-105" />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex items-center justify-center">
                                     <p className="text-white text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity">View Image</p>
+
                                 </div>
                                 {!isThumbnailLoading && (
                                     <div className="absolute top-2 right-2 flex flex-col gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
